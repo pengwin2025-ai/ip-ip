@@ -289,9 +289,15 @@ $buttonSavePreset.Location = New-Object System.Drawing.Point(20, 325)
 $buttonSavePreset.Size = New-Object System.Drawing.Size(110, 34)
 $editGroup.Controls.Add($buttonSavePreset)
 
+$buttonNewPreset = New-Object System.Windows.Forms.Button
+$buttonNewPreset.Text = "创建新预设"
+$buttonNewPreset.Location = New-Object System.Drawing.Point(145, 325)
+$buttonNewPreset.Size = New-Object System.Drawing.Size(110, 34)
+$editGroup.Controls.Add($buttonNewPreset)
+
 $buttonApplyCustom = New-Object System.Windows.Forms.Button
 $buttonApplyCustom.Text = "应用当前填写"
-$buttonApplyCustom.Location = New-Object System.Drawing.Point(145, 325)
+$buttonApplyCustom.Location = New-Object System.Drawing.Point(270, 325)
 $buttonApplyCustom.Size = New-Object System.Drawing.Size(130, 34)
 $editGroup.Controls.Add($buttonApplyCustom)
 
@@ -359,6 +365,17 @@ function Fill-FormFromPreset($preset) {
     $script:EditingPresetOriginalName = $preset.Name
 }
 
+function Clear-FormForNewPreset {
+    $listPresets.ClearSelected()
+    $textPresetName.Text = ""
+    $textIp.Text = ""
+    $textPrefix.Text = "24"
+    $textGateway.Text = ""
+    $textDns.Text = ""
+    $script:EditingPresetIndex = -1
+    $script:EditingPresetOriginalName = ""
+}
+
 function Get-SelectedAdapter {
     if (-not $comboAdapter.SelectedItem) {
         throw "请选择网卡。"
@@ -399,9 +416,48 @@ function Find-PresetIndexByName([string]$name) {
     return -1
 }
 
+function Create-NewPresetFromForm {
+    Validate-Form
+    $name = $textPresetName.Text.Trim()
+    if ([string]::IsNullOrWhiteSpace($name)) {
+        throw "请填写预设名称。"
+    }
+
+    if ((Find-PresetIndexByName $name) -ge 0) {
+        throw "已经存在同名预设，请换一个名称。"
+    }
+
+    $script:Presets += [pscustomobject]@{
+        Name = $name
+        IPAddress = $textIp.Text.Trim()
+        PrefixLength = [int]$textPrefix.Text.Trim()
+        Gateway = $textGateway.Text.Trim()
+        Dns = $textDns.Text.Trim()
+    }
+
+    Save-Presets $script:Presets
+    Refresh-PresetList
+    $selectedIndex = [Array]::IndexOf(@($script:Presets.Name), $name)
+    if ($selectedIndex -ge 0) {
+        $listPresets.SelectedIndex = $selectedIndex
+        $script:EditingPresetIndex = $selectedIndex
+        $script:EditingPresetOriginalName = $name
+    }
+    Set-Status "已新建预设：$name"
+}
+
 $buttonRefreshAdapters.Add_Click({
     Refresh-AdapterList
     Set-Status "网卡列表已刷新。"
+})
+
+$buttonNewPreset.Add_Click({
+    try {
+        Create-NewPresetFromForm
+    }
+    catch {
+        [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "新建失败") | Out-Null
+    }
 })
 
 $buttonLoadCurrent.Add_Click({
@@ -444,6 +500,10 @@ $buttonSavePreset.Add_Click({
             $editingIndex = Find-PresetIndexByName $originalName
         }
 
+        if ($editingIndex -lt 0 -or $editingIndex -ge $script:Presets.Count) {
+            throw '请先从左侧选中一个预设再保存修改。要新增请点“创建新预设”。'
+        }
+
         $duplicateIndex = Find-PresetIndexByName $name
         if ($duplicateIndex -ge 0 -and $duplicateIndex -ne $editingIndex) {
             if (-not [string]::IsNullOrWhiteSpace($originalName)) {
@@ -452,22 +512,11 @@ $buttonSavePreset.Add_Click({
             throw "已经存在同名预设，请换一个名称。"
         }
 
-        if ($editingIndex -ge 0 -and $editingIndex -lt $script:Presets.Count) {
-            $script:Presets[$editingIndex].Name = $name
-            $script:Presets[$editingIndex].IPAddress = $textIp.Text.Trim()
-            $script:Presets[$editingIndex].PrefixLength = [int]$textPrefix.Text.Trim()
-            $script:Presets[$editingIndex].Gateway = $textGateway.Text.Trim()
-            $script:Presets[$editingIndex].Dns = $textDns.Text.Trim()
-        }
-        else {
-            $script:Presets += [pscustomobject]@{
-                Name = $name
-                IPAddress = $textIp.Text.Trim()
-                PrefixLength = [int]$textPrefix.Text.Trim()
-                Gateway = $textGateway.Text.Trim()
-                Dns = $textDns.Text.Trim()
-            }
-        }
+        $script:Presets[$editingIndex].Name = $name
+        $script:Presets[$editingIndex].IPAddress = $textIp.Text.Trim()
+        $script:Presets[$editingIndex].PrefixLength = [int]$textPrefix.Text.Trim()
+        $script:Presets[$editingIndex].Gateway = $textGateway.Text.Trim()
+        $script:Presets[$editingIndex].Dns = $textDns.Text.Trim()
 
         Save-Presets $script:Presets
         Refresh-PresetList
