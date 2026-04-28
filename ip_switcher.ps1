@@ -84,8 +84,17 @@ function Get-Presets {
     }
 }
 
+function Normalize-Presets($presets) {
+    if ($null -eq $presets) {
+        return @()
+    }
+
+    return @($presets)
+}
+
 function Save-Presets([object[]]$presets) {
-    $json = $presets | ConvertTo-Json -Depth 4
+    $presetList = Normalize-Presets $presets
+    $json = @($presetList) | ConvertTo-Json -Depth 4
     Set-Content -LiteralPath $script:PresetFile -Value $json -Encoding UTF8
 }
 
@@ -164,7 +173,7 @@ if (-not (Ensure-Elevated)) {
     return
 }
 
-$script:Presets = Get-Presets
+$script:Presets = Normalize-Presets (Get-Presets)
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "IP 一键切换"
@@ -417,6 +426,7 @@ function Find-PresetIndexByName([string]$name) {
 }
 
 function Create-NewPresetFromForm {
+    $script:Presets = Normalize-Presets $script:Presets
     Validate-Form
     $name = $textPresetName.Text.Trim()
     if ([string]::IsNullOrWhiteSpace($name)) {
@@ -427,13 +437,13 @@ function Create-NewPresetFromForm {
         throw "已经存在同名预设，请换一个名称。"
     }
 
-    $script:Presets += [pscustomobject]@{
+    $script:Presets = @($script:Presets) + @([pscustomobject]@{
         Name = $name
         IPAddress = $textIp.Text.Trim()
         PrefixLength = [int]$textPrefix.Text.Trim()
         Gateway = $textGateway.Text.Trim()
         Dns = $textDns.Text.Trim()
-    }
+    })
 
     Save-Presets $script:Presets
     Refresh-PresetList
@@ -488,6 +498,7 @@ $listPresets.Add_SelectedIndexChanged({
 
 $buttonSavePreset.Add_Click({
     try {
+        $script:Presets = Normalize-Presets $script:Presets
         Validate-Form
         $name = $textPresetName.Text.Trim()
         if ([string]::IsNullOrWhiteSpace($name)) {
