@@ -19,5 +19,19 @@
         "PrefixLength":  24,
         "Gateway":  "192.168.9.1",
         "Dns":  "192.168.9.1"
+    },
+    {
+        "Name":  "122",
+        "IPAddress":  "192.168.9.2",
+        "PrefixLength":  24,
+        "Gateway":  "192.168.9.1",
+        "Dns":  "192.168.9.1"
+    },
+    {
+        "Name":  "1221",
+        "IPAddress":  "192.168.9.2",
+        "PrefixLength":  24,
+        "Gateway":  "192.168.9.1",
+        "Dns":  "192.168.9.1"
     }
 ]
