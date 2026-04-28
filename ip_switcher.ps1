@@ -301,6 +301,8 @@ $statusLabel.Location = New-Object System.Drawing.Point(20, 465)
 $statusLabel.Size = New-Object System.Drawing.Size(700, 24)
 $form.Controls.Add($statusLabel)
 
+$script:EditingPresetIndex = -1
+
 function Set-Status([string]$text) {
     $statusLabel.Text = $text
 }
@@ -322,9 +324,24 @@ function Refresh-AdapterList {
 }
 
 function Refresh-PresetList {
+    $selectedName = if ($listPresets.SelectedIndex -ge 0 -and $listPresets.SelectedIndex -lt $script:Presets.Count) {
+        $script:Presets[$listPresets.SelectedIndex].Name
+    }
+    else {
+        $null
+    }
+
     $listPresets.Items.Clear()
     foreach ($preset in $script:Presets) {
         [void]$listPresets.Items.Add($preset.Name)
+    }
+
+    if ($selectedName) {
+        $index = [Array]::IndexOf(@($script:Presets.Name), $selectedName)
+        if ($index -ge 0) {
+            $listPresets.SelectedIndex = $index
+            $script:EditingPresetIndex = $index
+        }
     }
 }
 
@@ -389,7 +406,11 @@ $buttonLoadCurrent.Add_Click({
 $listPresets.Add_SelectedIndexChanged({
     $index = $listPresets.SelectedIndex
     if ($index -ge 0) {
+        $script:EditingPresetIndex = $index
         Fill-FormFromPreset $script:Presets[$index]
+    }
+    else {
+        $script:EditingPresetIndex = -1
     }
 })
 
@@ -401,12 +422,25 @@ $buttonSavePreset.Add_Click({
             throw "请填写预设名称。"
         }
 
-        $existing = $script:Presets | Where-Object { $_.Name -eq $name } | Select-Object -First 1
-        if ($existing) {
-            $existing.IPAddress = $textIp.Text.Trim()
-            $existing.PrefixLength = [int]$textPrefix.Text.Trim()
-            $existing.Gateway = $textGateway.Text.Trim()
-            $existing.Dns = $textDns.Text.Trim()
+        $editingIndex = $script:EditingPresetIndex
+        $duplicateIndex = -1
+        for ($i = 0; $i -lt $script:Presets.Count; $i++) {
+            if ($script:Presets[$i].Name -eq $name) {
+                $duplicateIndex = $i
+                break
+            }
+        }
+
+        if ($duplicateIndex -ge 0 -and $duplicateIndex -ne $editingIndex) {
+            throw "已经存在同名预设，请换一个名称。"
+        }
+
+        if ($editingIndex -ge 0 -and $editingIndex -lt $script:Presets.Count) {
+            $script:Presets[$editingIndex].Name = $name
+            $script:Presets[$editingIndex].IPAddress = $textIp.Text.Trim()
+            $script:Presets[$editingIndex].PrefixLength = [int]$textPrefix.Text.Trim()
+            $script:Presets[$editingIndex].Gateway = $textGateway.Text.Trim()
+            $script:Presets[$editingIndex].Dns = $textDns.Text.Trim()
         }
         else {
             $script:Presets += [pscustomobject]@{
@@ -420,6 +454,11 @@ $buttonSavePreset.Add_Click({
 
         Save-Presets $script:Presets
         Refresh-PresetList
+        $selectedIndex = [Array]::IndexOf(@($script:Presets.Name), $name)
+        if ($selectedIndex -ge 0) {
+            $listPresets.SelectedIndex = $selectedIndex
+            $script:EditingPresetIndex = $selectedIndex
+        }
         Set-Status "预设已保存：$name"
     }
     catch {
@@ -437,6 +476,7 @@ $buttonDeletePreset.Add_Click({
     $name = $script:Presets[$index].Name
     $script:Presets = @($script:Presets | Where-Object { $_.Name -ne $name })
     Save-Presets $script:Presets
+    $script:EditingPresetIndex = -1
     Refresh-PresetList
     Set-Status "预设已删除：$name"
 })
