@@ -302,6 +302,7 @@ $statusLabel.Size = New-Object System.Drawing.Size(700, 24)
 $form.Controls.Add($statusLabel)
 
 $script:EditingPresetIndex = -1
+$script:EditingPresetOriginalName = ""
 
 function Set-Status([string]$text) {
     $statusLabel.Text = $text
@@ -324,7 +325,10 @@ function Refresh-AdapterList {
 }
 
 function Refresh-PresetList {
-    $selectedName = if ($listPresets.SelectedIndex -ge 0 -and $listPresets.SelectedIndex -lt $script:Presets.Count) {
+    $selectedName = if (-not [string]::IsNullOrWhiteSpace($script:EditingPresetOriginalName)) {
+        $script:EditingPresetOriginalName
+    }
+    elseif ($listPresets.SelectedIndex -ge 0 -and $listPresets.SelectedIndex -lt $script:Presets.Count) {
         $script:Presets[$listPresets.SelectedIndex].Name
     }
     else {
@@ -341,6 +345,7 @@ function Refresh-PresetList {
         if ($index -ge 0) {
             $listPresets.SelectedIndex = $index
             $script:EditingPresetIndex = $index
+            $script:EditingPresetOriginalName = $script:Presets[$index].Name
         }
     }
 }
@@ -351,6 +356,7 @@ function Fill-FormFromPreset($preset) {
     $textPrefix.Text = [string]$preset.PrefixLength
     $textGateway.Text = $preset.Gateway
     $textDns.Text = $preset.Dns
+    $script:EditingPresetOriginalName = $preset.Name
 }
 
 function Get-SelectedAdapter {
@@ -381,6 +387,16 @@ function Validate-Form {
             throw "DNS 地址格式不正确：$dns"
         }
     }
+}
+
+function Find-PresetIndexByName([string]$name) {
+    for ($i = 0; $i -lt $script:Presets.Count; $i++) {
+        if ($script:Presets[$i].Name -eq $name) {
+            return $i
+        }
+    }
+
+    return -1
 }
 
 $buttonRefreshAdapters.Add_Click({
@@ -423,15 +439,16 @@ $buttonSavePreset.Add_Click({
         }
 
         $editingIndex = $script:EditingPresetIndex
-        $duplicateIndex = -1
-        for ($i = 0; $i -lt $script:Presets.Count; $i++) {
-            if ($script:Presets[$i].Name -eq $name) {
-                $duplicateIndex = $i
-                break
-            }
+        $originalName = $script:EditingPresetOriginalName
+        if (($editingIndex -lt 0 -or $editingIndex -ge $script:Presets.Count) -and -not [string]::IsNullOrWhiteSpace($originalName)) {
+            $editingIndex = Find-PresetIndexByName $originalName
         }
 
+        $duplicateIndex = Find-PresetIndexByName $name
         if ($duplicateIndex -ge 0 -and $duplicateIndex -ne $editingIndex) {
+            if (-not [string]::IsNullOrWhiteSpace($originalName)) {
+                throw ('你当前是在修改预设 "{0}"，新名字 "{1}" 已经被别的预设占用了。' -f $originalName, $name)
+            }
             throw "已经存在同名预设，请换一个名称。"
         }
 
@@ -458,6 +475,7 @@ $buttonSavePreset.Add_Click({
         if ($selectedIndex -ge 0) {
             $listPresets.SelectedIndex = $selectedIndex
             $script:EditingPresetIndex = $selectedIndex
+            $script:EditingPresetOriginalName = $name
         }
         Set-Status "预设已保存：$name"
     }
@@ -477,6 +495,7 @@ $buttonDeletePreset.Add_Click({
     $script:Presets = @($script:Presets | Where-Object { $_.Name -ne $name })
     Save-Presets $script:Presets
     $script:EditingPresetIndex = -1
+    $script:EditingPresetOriginalName = ""
     Refresh-PresetList
     Set-Status "预设已删除：$name"
 })
